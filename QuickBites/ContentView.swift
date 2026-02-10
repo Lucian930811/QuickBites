@@ -52,6 +52,9 @@ struct ContentView: View {
                         .border(.black)
                         .background(.white)
                 }
+                NavigationStack {
+                    ResultsView()
+                }
                 
             }
             .padding()
