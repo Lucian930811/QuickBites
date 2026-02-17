@@ -14,7 +14,7 @@ struct ContentView: View {
     @State private var isVegan = false
     @State private var isOpenNow = true
     @State private var priceRange = 2
-    @State private var meal = "morning"
+    @State private var meal: String = ""
     
     @ObservedObject var vm: RecommendationViewModel
     
@@ -42,6 +42,13 @@ struct ContentView: View {
                     .padding(10)
                 Toggle("Vegan", isOn: $isVegan)
                 Toggle("Open Now", isOn: $isOpenNow)
+                Picker("Meal", selection: $meal) {
+                    Text("Any").tag("")
+                    Text("Breakfast").tag("breakfast")
+                    Text("Lunch").tag("lunch")
+                    Text("Dinner").tag("dinner")
+                }
+                .pickerStyle(.segmented)
                 Stepper("Price Range: \(priceRange)", value: $priceRange, in: 1...4)
 
                 Button {
@@ -49,7 +56,9 @@ struct ContentView: View {
                         await vm.search(
                             keywords: query,
                             maxPrice: priceRange,
-                            meal: meal
+                            meal: meal,
+                            isVegan: isVegan,
+                            isOpenNow: isOpenNow
                         )
                     }
                 } label: {

@@ -12,7 +12,7 @@ struct ResultsView: View {
     var body: some View {
         NavigationStack {
             List(vm.results) { r in
-                RestaurantRow(r: r)
+                RestaurantRow(r: r, vm: vm)
             }
             .navigationTitle("QuickBites")
         }
