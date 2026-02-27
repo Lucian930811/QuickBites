@@ -15,6 +15,7 @@ struct ContentView: View {
     @State private var isOpenNow = true
     @State private var priceRange = 2
     @State private var meal: String = ""
+    @State private var isPersonalized = false
     
     @ObservedObject var vm: RecommendationViewModel
     
@@ -42,6 +43,8 @@ struct ContentView: View {
                     .padding(10)
                 Toggle("Vegan", isOn: $isVegan)
                 Toggle("Open Now", isOn: $isOpenNow)
+                Toggle("Personalize (Beta)", isOn: $isPersonalized)
+                    .tint(.purple)
                 Picker("Meal", selection: $meal) {
                     Text("Any").tag("")
                     Text("Breakfast").tag("breakfast")
@@ -58,7 +61,8 @@ struct ContentView: View {
                             maxPrice: priceRange,
                             meal: meal,
                             isVegan: isVegan,
-                            isOpenNow: isOpenNow
+                            isOpenNow: isOpenNow,
+                            personalize: isPersonalized
                         )
                     }
                 } label: {

@@ -9,7 +9,8 @@ class RecommendationViewModel: ObservableObject {
                     maxPrice: Int?,
                     meal: String,
                     isVegan: Bool,
-                    isOpenNow: Bool) async {
+                    isOpenNow: Bool,
+                    personalize: Bool = false) async {
         // Build the query string
         var urlComponents = URLComponents(string: "http://127.0.0.1:8000/recommend")!
         var queryItems: [URLQueryItem] = [
@@ -23,6 +24,7 @@ class RecommendationViewModel: ObservableObject {
         }
         queryItems.append(URLQueryItem(name: "vegan", value: "\(isVegan)"))
         queryItems.append(URLQueryItem(name: "open_now", value: "\(isOpenNow)"))
+        queryItems.append(URLQueryItem(name: "personalize", value: personalize ? "true" : "false"))
         urlComponents.queryItems = queryItems
 
         guard let url = urlComponents.url else { return }
@@ -38,6 +40,16 @@ class RecommendationViewModel: ObservableObject {
             print("Request failed:", error)
         }
     }
+    
+    func logInteraction(restaurant: Restaurant, eventType: String) {
+        APIService.logInteraction(
+            businessId: restaurant.id,
+            eventType: eventType,
+            categories: restaurant.matched_categories,
+            priceLevel: restaurant.price_level
+        )
+    }
+
     // Helper to parse good_for_meal string -> dictionary
        func parseMealInfo(_ str: String?) -> [String: Bool] {
            guard let str = str else { return [:] }

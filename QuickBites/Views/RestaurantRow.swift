@@ -50,7 +50,17 @@ struct RestaurantRow: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            
+            if let explanation = r.explanation {
+                Text("✨ \(explanation)")
+                    .font(.caption)
+                    .foregroundStyle(.purple)
+                    .padding(.top, 2)
+            }
         }
         .padding(4)
+        .onTapGesture {
+            vm.logInteraction(restaurant: r, eventType: "click")
+        }
     }
 }

@@ -4,6 +4,7 @@ struct Restaurant: Identifiable, Decodable, Equatable {
     let stars: Double
     let review_count: Int
     let score: Double
+    let explanation: String?
     let matched_categories: String
     let latitude: Double
     let longitude: Double
