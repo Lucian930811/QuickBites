@@ -7,10 +7,18 @@ from compute_content_score import content_score, only_relevant_categories
 
 app = FastAPI()
 
-# If running from inside the `src` folder, the data is up one level
+# Robust path resolution for team members with different folder structures
 import os
 base_dir = os.path.dirname(os.path.abspath(__file__))
+
+# 1. Try checking if data is at the project root (../data/)
 csv_path = os.path.join(base_dir, "../data/ca_business_enriched.csv")
+PROFILE_FILE = os.path.join(base_dir, "../data/test_user_profile.json")
+
+# 2. Fall back to checking if data is inside the src folder (./data/)
+if not os.path.exists(csv_path):
+    csv_path = os.path.join(base_dir, "data/ca_business_enriched.csv")
+    PROFILE_FILE = os.path.join(base_dir, "data/test_user_profile.json")
 
 df = pd.read_csv(csv_path)
 
@@ -29,8 +37,6 @@ def safe_float(val):
 max_reviews = df["review_count"].max()
 
 # --- User Profile & Memory Setup ---
-PROFILE_FILE = os.path.join(base_dir, "../data/test_user_profile.json")
-
 def load_profile():
     if os.path.exists(PROFILE_FILE):
         try:
