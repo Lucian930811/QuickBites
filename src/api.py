@@ -4,6 +4,7 @@ from pydantic import BaseModel
 import ast
 import json
 from compute_content_score import content_score, only_relevant_categories
+from distance_utils import distance_matrix_etas, commute_etas, eta_decay
 
 app = FastAPI()
 
@@ -51,7 +52,12 @@ def load_profile():
             "cuisine": {},      # e.g., "ramen": 5.0
             "price_level": {}   # e.g., "1": 3.0
         },
-        "short_term": []        # List of recent interaction dicts
+        "short_term": [],       # List of recent interaction dicts
+        "locations": {                  # NEW
+            "home": {"lat": None, "lon": None},
+            "work": {"lat": None, "lon": None}
+        }
+
     }
 
 def save_profile(profile):
@@ -114,19 +120,39 @@ def log_interaction(event: InteractionEvent):
 
 
 @app.get("/recommend")
-def recommend(keywords: str = "", max_price: int | None = None, meal: str | None = None, personalize: bool = False):
+def recommend(
+    keywords: str = "",
+    max_price: int | None = None,
+    meal: str | None = None,
+    personalize: bool = False,
+    lat: float | None = None,
+    lon: float | None = None,
+    vegan: bool = False,
+    origin: str = "current",
+    distance_weight: float = 0.5
+):
+    
+    if origin == "commute":
+        home = user_profile.get("locations", {}).get("home", {})
+        work = user_profile.get("locations", {}).get("work", {})
+        home_lat, home_lon = home.get("lat"), home.get("lon")
+        work_lat, work_lon = work.get("lat"), work.get("lon")
+        use_commute = home_lat and home_lon and work_lat and work_lon
+    else:
+        use_commute = False
+
     user_keywords = [k.strip() for k in keywords.split(",") if k.strip()]
     results = []
-
     profile_to_use = user_profile if personalize else None
 
     for _, row in df.iterrows():
         row_dict = row.to_dict()
 
-        # score can be 0 if you want to include all
-        score, explanation = content_score(row_dict, user_keywords, max_price, meal, max_reviews, profile_to_use)
+        # 2. HARD FILTER: vegan
+        if vegan and "Vegan" not in str(row_dict.get("categories", "")):
+            continue
 
-        # parse attributes safely
+        # parse attributes early so we can hard filter meal
         attributes_raw = row_dict.get("attributes")
         price_level_int = None
         good_for_meal = None
@@ -140,7 +166,18 @@ def recommend(keywords: str = "", max_price: int | None = None, meal: str | None
                 except (TypeError, ValueError):
                     price_level_int = None
             except Exception:
-                pass  # just skip parsing attributes if it fails
+                pass
+
+        # 3. HARD FILTER: meal
+        if meal and good_for_meal:
+            try:
+                meal_dict = ast.literal_eval(good_for_meal) if isinstance(good_for_meal, str) else good_for_meal
+                if not meal_dict.get(meal, False):
+                    continue
+            except Exception:
+                pass  # if parsing fails, don't filter out
+
+        score, explanation = content_score(row_dict, user_keywords, max_price, meal, max_reviews, profile_to_use)
 
         results.append({
             "business_id": row_dict.get("business_id"),
@@ -149,10 +186,7 @@ def recommend(keywords: str = "", max_price: int | None = None, meal: str | None
             "review_count": row_dict.get("review_count") if not pd.isna(row_dict.get("review_count")) else None,
             "score": safe_float(score),
             "explanation": explanation,
-            "matched_categories": only_relevant_categories(
-                row_dict.get("categories", ""),
-                user_keywords
-            ),
+            "matched_categories": only_relevant_categories(row_dict.get("categories", ""), user_keywords),
             "latitude": safe_float(row_dict.get("latitude")),
             "longitude": safe_float(row_dict.get("longitude")),
             "address": row_dict.get("address") if not pd.isna(row_dict.get("address")) else None,
@@ -164,10 +198,27 @@ def recommend(keywords: str = "", max_price: int | None = None, meal: str | None
             "good_for_meal": str(good_for_meal) if good_for_meal else None
         })
 
-
-    # sort top 10
     results.sort(key=lambda x: x["score"], reverse=True)
-    return results[:10]
+    top_candidates = results[:25]
+
+    destinations = [{"latitude": r["latitude"], "longitude": r["longitude"]} for r in top_candidates]
+    if origin == "commute" and use_commute:
+        etas = commute_etas(home_lat, home_lon, work_lat, work_lon, destinations)
+    else:
+        etas = distance_matrix_etas(lat, lon, destinations)
+
+    for r, eta in zip(top_candidates, etas):
+        if eta is None:
+            r["eta_min"] = None
+            continue
+        r["eta_min"] = eta
+        decay = eta_decay(eta, tau=30.0 if origin == "commute" else 10.0)
+
+        # Blend: 0.0 = pure content score, 1.0 = fully distance weighted
+        r["score"] = r["score"] * (1 - distance_weight) + r["score"] * decay * distance_weight
+
+    top_candidates.sort(key=lambda x: x["score"], reverse=True)
+    return top_candidates[:10]
 
 @app.get("/profile")
 def get_profile():
@@ -252,3 +303,58 @@ def search(req: SearchRequest):
 
     results.sort(key=lambda x: x["score"], reverse=True)
     return results[:10]
+def load_profile():
+    if os.path.exists(PROFILE_FILE):
+        try:
+            with open(PROFILE_FILE, "r") as f:
+                profile = json.load(f)
+                # Migrate old profiles missing locations key
+                if "locations" not in profile:
+                    profile["locations"] = {
+                        "home": {"lat": None, "lon": None},
+                        "work": {"lat": None, "lon": None}
+                    }
+                    save_profile(profile)
+                return profile
+        except Exception:
+            pass
+    return {
+        "user_id": "test_user_001",
+        "long_term": {
+            "cuisine": {},
+            "price_level": {}
+        },
+        "short_term": [],
+
+        "locations": {
+            "home": {"lat": None, "lon": None, "name": ""},
+            "work": {"lat": None, "lon": None, "name": ""}
+        }
+
+    }
+
+class SavedLocation(BaseModel):
+    label: str
+    lat: float
+    lon: float
+    name: str = ""
+
+@app.post("/profile/location")
+def save_location(loc: SavedLocation):
+    global user_profile
+    if loc.label not in ("home", "work"):
+        return {"status": "error", "reason": "label must be 'home' or 'work'"}
+    if "locations" not in user_profile:
+        user_profile["locations"] = {
+            "home": {"lat": None, "lon": None, "name": ""},
+            "work": {"lat": None, "lon": None, "name": ""}
+        }
+    user_profile["locations"][loc.label]["lat"] = loc.lat
+    user_profile["locations"][loc.label]["lon"] = loc.lon
+    user_profile["locations"][loc.label]["name"] = loc.name
+    save_profile(user_profile)
+    return {"status": "success", "locations": user_profile["locations"]}
+
+@app.get("/profile/locations")
+def get_locations():
+    return user_profile.get("locations", {})

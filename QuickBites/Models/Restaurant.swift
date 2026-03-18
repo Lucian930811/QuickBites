@@ -14,7 +14,8 @@ struct Restaurant: Identifiable, Decodable, Equatable {
     let state: String?
     let hours: String?
     let good_for_meal: String?
-    let is_vegan: Bool?  
+    let is_vegan: Bool?
+    let eta_min: Double?   
 
     var id: String { business_id }
 

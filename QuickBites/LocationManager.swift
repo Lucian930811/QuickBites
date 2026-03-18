@@ -18,6 +18,7 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
         super.init()
         manager.delegate = self
         startLocationServices()
+        manager.startUpdatingLocation()
     }
     
     
@@ -30,7 +31,7 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
         }
     }
     
-    func locationManager(_ manager: CLLocationManager, didUpdateLocation locations: [CLLocation]) {
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         userLocation = locations.last
     }
     
@@ -38,7 +39,7 @@ class LocationManager: NSObject, CLLocationManagerDelegate {
         switch manager.authorizationStatus {
         case .authorizedAlways, .authorizedWhenInUse:
             isAuthorized = true
-            manager.requestLocation()
+            manager.startUpdatingLocation()
         case .notDetermined:
             isAuthorized = false
             manager.requestWhenInUseAuthorization()

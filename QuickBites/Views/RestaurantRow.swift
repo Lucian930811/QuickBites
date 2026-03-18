@@ -51,6 +51,12 @@ struct RestaurantRow: View {
                     .foregroundStyle(.secondary)
             }
             
+            if let eta = r.eta_min {
+                Text("🚗 \(eta, specifier: "%.0f") min away")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            
             if let explanation = r.explanation {
                 Text("✨ \(explanation)")
                     .font(.caption)

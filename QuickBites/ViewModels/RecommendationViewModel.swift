@@ -10,7 +10,11 @@ class RecommendationViewModel: ObservableObject {
                     meal: String,
                     isVegan: Bool,
                     isOpenNow: Bool,
-                    personalize: Bool = false) async {
+                    personalize: Bool = false,
+                    lat: Double?,
+                    lon: Double?,
+                    origin: String = "current",
+                    distanceWeight: Double = 0.5) async {
         // Build the query string
         var urlComponents = URLComponents(string: "http://127.0.0.1:8000/recommend")!
         var queryItems: [URLQueryItem] = [
@@ -25,6 +29,14 @@ class RecommendationViewModel: ObservableObject {
         queryItems.append(URLQueryItem(name: "vegan", value: "\(isVegan)"))
         queryItems.append(URLQueryItem(name: "open_now", value: "\(isOpenNow)"))
         queryItems.append(URLQueryItem(name: "personalize", value: personalize ? "true" : "false"))
+        if let lat = lat {
+            queryItems.append(URLQueryItem(name: "lat", value: "\(lat)"))
+        }
+        if let lon = lon {
+            queryItems.append(URLQueryItem(name: "lon", value: "\(lon)"))
+        }
+        queryItems.append(URLQueryItem(name: "origin", value: origin))
+        queryItems.append(URLQueryItem(name: "distance_weight", value: "\(distanceWeight)"))
         urlComponents.queryItems = queryItems
 
         guard let url = urlComponents.url else { return }
